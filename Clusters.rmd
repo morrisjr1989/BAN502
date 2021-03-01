@@ -1,0 +1,136 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+
+
+Jeffrey Ryan Morris  
+2/22/2021  
+BAN 502  
+Module 6: Assignment 1 Clustering
+
+
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+```
+
+```{r}
+trucks = read.csv("trucks.csv")
+```
+
+
+### Task 1
+
+It is unclear that any linear relationship exists between these variables. 
+There appears to be 4 clusters. 
+1) Distance 25 to 75, Speeding 17 to 50.
+2) Distance 25 to 75, Speeding 0 to 17.
+3) Distance 150 to 200, Speeding 0 to 25.
+4) Distance ~110 and speeding ~ 75
+
+```{r}
+trucks %>% 
+  ggplot(aes(x=Distance, y=Speeding)) +
+  geom_point(alpha=0.4) + theme_bw()
+```
+
+### Task 2
+
+```{r}
+trucks = select(trucks, -Driver_ID)
+
+kmeans_recipe = recipe(~ Distance + Speeding, trucks) 
+
+trucks_dummy = kmeans_recipe %>% 
+  step_scale(all_numeric()) %>%
+  step_center(all_numeric()) 
+
+trucks_dummy = prep(trucks_dummy, trucks) #prepares the recipe
+
+trucks_cleaned = bake(trucks_dummy, trucks) #applies the recipe and yields a data frame
+```
+
+### Task 3
+
+K Mean cluster of 2 is not impressive for this problem.  There are obviously more clusters than 2 and I don't think a observation of 200 distance and 100 speeding is remotely similar to 250 distance and 10 speeding.
+
+```{r}
+set.seed(64)
+clusters = kmeans(trucks_cleaned, 2)
+trucks_augmented1 = augment(clusters, trucks)
+str(trucks_augmented1)
+```
+```{r}
+
+ggplot(trucks_augmented1, aes(x=Distance,y=Speeding,color=factor(.cluster))) + geom_point()
+
+```
+
+### Task 4
+
+A K value of 4 appears to be the best for this dataset.
+
+
+
+```{r}
+set.seed(412)
+clusts = 
+  tibble(k = 1:8) %>%
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusts
+```
+```{r}
+clusters = 
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+```
+
+```{r}
+p1 = 
+  ggplot(assignments, aes(x = Distance, y = Speeding)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) + 
+  facet_wrap(~ k)
+p1
+```
+
+### Task 5
+
+K of 4 appears to be the best.
+
+```{r}
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point()
+```
+
+### Task 6
+I think this K=4 result is nice. From the graph there appears to only be 1 data point that could be in the wrong group (Distance ~120, Speeding~5). Put otherwise pretty spot on
+```{r}
+set.seed(64)
+clusters = kmeans(trucks_cleaned, 4)
+trucks_augmented2 = augment(clusters, trucks)
+str(trucks_augmented2)
+```
+
+```{r}
+ggplot(trucks_augmented2, aes(x=Distance,y=Speeding,color=factor(.cluster))) + geom_point()
+
+```
+
